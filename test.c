@@ -35,7 +35,7 @@ char *getLexeme(void);
 #define TBLSIZE 64
 // Set PRINTERR to 1 to print error message while calling error()
 // Make sure you set PRINTERR to 0 before you submit your code
-#define PRINTERR 1
+#define PRINTERR 0
 
 // Call this macro to print error message and exit the program
 // This will also print where you called it in your program
@@ -157,9 +157,17 @@ TokenSet getToken(void)
     } else if (c == ')') {
         strcpy(lexeme, ")");
         return RPAREN;
-    } else if (isalpha(c)) {
+    } else if (isalpha(c) || isdigit(c) || (c == '_')) {
         lexeme[0] = c;
-        lexeme[1] = '\0';
+        c = fgetc(stdin);
+        i = 1;
+        while ((isdigit(c) || isalpha(c) || c == '_') && i < MAXLEN) {
+            lexeme[i] = c;
+            ++i;
+            c = fgetc(stdin);
+        }
+        ungetc(c, stdin);
+        lexeme[i] = '\0';
         return ID;
     } else if (c == EOF) {
         return ENDFILE;
@@ -245,7 +253,7 @@ int setval(char *str, int val) {
 BTNode *makeNode(TokenSet tok, const char *lexe) {
     BTNode *node = (BTNode*)malloc(sizeof(BTNode));
     strcpy(node->lexeme, lexe);
-    node->id=-1;
+    node->id=0;
     node->data = tok;
     /*if(tok==ID)
         node->isvar=1;
@@ -452,19 +460,26 @@ void statement(void) {
     BTNode *retp = NULL;
 
     if (match(ENDFILE)) {
+        for(int i=0;i<3;i++){
+            reg[i]=table[i].val;
+            printf("MOV r%d [%d]\n",i,4*i);
+        }
+        printf("EXIT 0\n");
         exit(0);
     } else if (match(END)) {
-        printf(">> ");
+        //printf(">> ");
         advance();
     } else {
         retp = or_expr();
         if (match(END)) {
-            printf("%d\n", evaluateTree(retp));
+            int a=evaluateTree(retp);
+            /*printf("%d\n", evaluateTree(retp));
             printf("Prefix traversal: ");
             printPrefix(retp);
-            printf("\n");
+            printf("\n");*/
+            cnt=0;
             freeTree(retp);
-            printf(">> ");
+            //printf(">> ");
             advance();
         } else {
             error(SYNTAXERR);
@@ -502,6 +517,7 @@ void err(ErrorType (errorNum)) {
                 break;
         }
     }
+    puts("EXIT 1");
     exit(0);
 }
 
@@ -541,6 +557,7 @@ int evaluateTree(BTNode *root) {
                 for(int i=0;i<sbcount;i++){
                     if(strcmp(root->left->lexeme,table[i].name)==0){
                         printf("MOV [%d] r%d\n",4*i,root->right->id);
+                        root->id=root->right->id;
                     }
                 }
                 cnt=0;
@@ -606,10 +623,28 @@ int evaluateTree(BTNode *root) {
                     retval=lv^rv;
                 }else if(strcmp(root->lexeme,"++")==0){
                     //lv=evaluateTree(root->left);
+                    reg[cnt]=1;
+                    printf("MOV r%d %d\n",cnt,1);
+                    printf("ADD r%d r%d\n",root->left->id,cnt);
+                    for(int i=0;i<sbcount;i++){
+                        if(strcmp(root->left->lexeme,table[i].name)==0){
+                            printf("MOV [%d] r%d\n",4*i,root->left->id);
+                        }
+                    }
+                    root->id=root->left->id;
                     ++lv;
                     retval = setval(root->left->lexeme,lv);
                 }else if(strcmp(root->lexeme,"--")==0){
                    //lv=evaluateTree(root->left);
+                   reg[cnt]=-1;
+                    printf("MOV r%d %d\n",cnt,-1);
+                    printf("ADD r%d r%d\n",root->left->id,cnt);
+                    for(int i=0;i<sbcount;i++){
+                        if(strcmp(root->left->lexeme,table[i].name)==0){
+                            printf("MOV [%d] r%d\n",4*i,root->left->id);
+                        }
+                    }
+                     root->id=root->left->id;
                     --lv;
                     retval = setval(root->left->lexeme,lv);
                 }
@@ -660,9 +695,10 @@ main
 
 int main() {
     initTable();
-    printf(">> ");
+    //printf(">> ");
     while (1) {
         statement();
     }
+    printf("EXIT 0\n");
     return 0;
 }
